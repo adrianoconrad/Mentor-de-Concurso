@@ -1,0 +1,57 @@
+{
+  "entities": {
+    "SavedMap": {
+      "title": "SavedMap",
+      "description": "A saved mental map",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "content": { "type": "string" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "name", "content", "createdAt"]
+    },
+    "Folder": {
+      "title": "Folder",
+      "description": "A container for mental maps",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "name", "createdAt"]
+    },
+    "Wallpaper": {
+      "title": "Wallpaper",
+      "description": "A custom user wallpaper image",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "url": { "type": "string" },
+        "name": { "type": "string" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "url", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/settings/appearance": {
+      "schema": "object",
+      "description": "User appearance settings like blur and opacity"
+    },
+    "/users/{userId}/wallpapers/{wallpaperId}": {
+      "schema": "Wallpaper",
+      "description": "Custom wallpapers uploaded by the user"
+    },
+    "/users/{userId}/folders/{folderId}": {
+      "schema": "Folder",
+      "description": "Folders created by the user"
+    },
+    "/users/{userId}/folders/{folderId}/maps/{mapId}": {
+      "schema": "SavedMap",
+      "description": "Maps saved within a folder"
+    }
+  }
+}
