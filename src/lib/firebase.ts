@@ -14,10 +14,18 @@ export const signOut = () => auth.signOut();
 // CRITICAL: Test connection
 async function testConnection() {
   try {
+    console.log("Testing Firestore connection...");
     await getDocFromServer(doc(db, 'test', 'connection'));
-  } catch (error) {
-    if(error instanceof Error && error.message.includes('the client is offline')) {
-      console.error("Please check your Firebase configuration.");
+    console.log("Firestore connection test: Success (even if doc doesn't exist, communication established)");
+  } catch (error: any) {
+    console.error("Firestore Connection Error Details:", {
+      code: error.code,
+      message: error.message,
+      name: error.name,
+      stack: error.stack
+    });
+    if(error.message.includes('the client is offline')) {
+      console.error("Please check your internet connection and Firebase configuration (projectId/databaseId).");
     }
   }
 }

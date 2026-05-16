@@ -1,6 +1,6 @@
 {
-  "name": "Mentor INSS - Mapas Mentais",
-  "description": "Plataforma de mentor para o concurso do INSS que transforma materiais de estudo em mapas mentais (Mermaid.js) e resumos estratégicos com foco em memorização.",
+  "name": "Study Mentor",
+  "description": "Plataforma Study Mentor que transforma materiais de estudo em mapas mentais e resumos estratégicos com foco em memorização e alto rendimento.",
   "requestFramePermissions": [],
   "majorCapabilities": []
 }

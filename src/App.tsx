@@ -55,11 +55,15 @@ export default function App() {
   const [isExtracting, setIsExtracting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expandedMap, setExpandedMap] = useState<string | null>(null);
+  const [expandedExplanation, setExpandedExplanation] = useState<string | null>(null);
+  const [showExplanationSidebar, setShowExplanationSidebar] = useState(true);
   const [bgColor, setBgColor] = useState('bg-[#E4E3E0]');
   const [glassEffect, setGlassEffect] = useState(true);
   const [showBgModal, setShowBgModal] = useState(false);
   const [showLibrary, setShowLibrary] = useState(false);
   const [user, setUser] = useState<User | null>(null);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
   const [folders, setFolders] = useState<Folder[]>([]);
   const [wallpapers, setWallpapers] = useState<Wallpaper[]>([]);
   const [appearance, setAppearance] = useState<AppearanceSettings>({
@@ -85,9 +89,33 @@ export default function App() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
+      setIsLoggingIn(false);
     });
     return () => unsubscribe();
   }, []);
+
+  const handleSignIn = async () => {
+    try {
+      setIsLoggingIn(true);
+      setAuthError(null);
+      await signIn();
+    } catch (error: any) {
+      console.error("Login error:", error);
+      setIsLoggingIn(false);
+      let errorMsg = 'Erro ao entrar com Google.';
+      if (error.code === 'auth/popup-blocked') {
+        errorMsg = 'Pop-up bloqueado. Por favor, permita pop-ups para este site.';
+      } else if (error.code === 'auth/cancelled-popup-request') {
+        errorMsg = 'Login cancelado.';
+      } else if (error.code === 'auth/network-request-failed') {
+        errorMsg = 'Erro de rede. Verifique sua conexão.';
+      } else {
+        errorMsg = error.message || 'Erro desconhecido no login.';
+      }
+      setAuthError(errorMsg);
+      setTimeout(() => setAuthError(null), 10000);
+    }
+  };
 
   useEffect(() => {
     if (!user) {
@@ -134,7 +162,7 @@ export default function App() {
     reader.readAsDataURL(file);
   };
 
-  const saveMap = async (folderId: string, name: string, content: string, chatMessages?: Message[]) => {
+  const saveMap = async (folderId: string, name: string, content: string, explanation?: string, chatMessages?: Message[]) => {
     if (!user) {
       alert('Faça login para salvar seus mapas.');
       return;
@@ -143,6 +171,7 @@ export default function App() {
       id: Math.random().toString(36).substr(2, 9) + Date.now().toString(36),
       name: name || 'Sem Título',
       content,
+      explanation,
       messages: chatMessages,
       createdAt: Date.now(),
       style: mapStyle
@@ -196,7 +225,7 @@ export default function App() {
       // Fallback if no history was saved
       setMessages([{
         role: 'model',
-        content: `Mapa carregado: **${map.name}**`,
+        content: map.explanation || `Mapa carregado: **${map.name}**`,
         mermaidCode: map.content,
         isMapReady: true
       }]);
@@ -265,7 +294,7 @@ export default function App() {
         if (chunk.isComplete && chunk.mermaidCode && user) {
           const folderToSave = selectedFolderId || (folders.length > 0 ? folders[0].id : null);
           if (folderToSave) {
-            saveMap(folderToSave, lastFileName.current || 'Estudo IA', chunk.mermaidCode, [
+            saveMap(folderToSave, lastFileName.current || 'Estudo IA', chunk.mermaidCode, chunk.explanation, [
               ...currentMessages,
               {
                 role: 'model',
@@ -423,11 +452,15 @@ export default function App() {
                     </p>
                   </div>
                   <button 
-                    onClick={() => signIn()}
-                    className="w-full py-4 bg-[#4A5D23] text-white rounded-2xl font-black uppercase tracking-widest shadow-xl hover:scale-105 transition-all"
+                    onClick={handleSignIn}
+                    disabled={isLoggingIn}
+                    className="w-full py-4 bg-[#4A5D23] text-white rounded-2xl font-black uppercase tracking-widest shadow-xl hover:scale-105 transition-all disabled:opacity-50"
                   >
-                    Entrar com Google
+                    {isLoggingIn ? 'Entrando...' : 'Entrar com Google'}
                   </button>
+                  {authError && (
+                    <p className="text-[10px] text-red-500 font-bold uppercase tracking-tight mt-2">{authError}</p>
+                  )}
                 </div>
               ) : (
                 <>
@@ -539,6 +572,7 @@ export default function App() {
                                       <button 
                                         onClick={() => {
                                           setExpandedMap(map.content);
+                                          setExpandedExplanation(map.explanation || null);
                                           setMapStyle(map.style || 'default');
                                         }}
                                         className="flex-1 text-left mt-1"
@@ -554,6 +588,7 @@ export default function App() {
                                           onClick={(e) => {
                                             e.stopPropagation();
                                             setExpandedMap(map.content);
+                                            setExpandedExplanation(map.explanation || null);
                                             setMapStyle(map.style || 'default');
                                           }}
                                           className="p-3 text-[#4A5D23] hover:bg-[#4A5D23] hover:text-white rounded-xl transition-all cursor-pointer shadow-sm border border-black/5 bg-white"
@@ -744,30 +779,75 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 bg-black/5 p-1 rounded-full border border-black/5">
-                  {(['default', 'handmade'] as MapStyle[]).map((s) => (
-                    <button
-                      key={s}
-                      onClick={() => setMapStyle(s)}
-                      className={cn(
-                        "px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-tighter transition-all",
-                        mapStyle === s ? "bg-[#4A5D23] text-white shadow-lg" : "text-black/40 hover:text-black"
-                      )}
-                    >
-                      {s === 'default' ? 'Padrão' : 'Manual'}
-                    </button>
-                  ))}
+                <div className="flex items-center gap-4 bg-black/5 p-1 rounded-full border border-black/5">
+                  <div className="flex items-center gap-2 px-2">
+                    {(['default', 'handmade'] as MapStyle[]).map((s) => (
+                      <button
+                        key={s}
+                        onClick={() => setMapStyle(s)}
+                        className={cn(
+                          "px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-tighter transition-all",
+                          mapStyle === s ? "bg-[#4A5D23] text-white shadow-lg" : "text-black/40 hover:text-black"
+                        )}
+                      >
+                        {s === 'default' ? 'Padrão' : 'Manual'}
+                      </button>
+                    ))}
+                  </div>
+                  
+                  {expandedExplanation && (
+                    <>
+                      <div className="w-[1px] h-6 bg-black/10 mx-1" />
+                      <button
+                        onClick={() => setShowExplanationSidebar(!showExplanationSidebar)}
+                        className={cn(
+                          "flex items-center gap-2 px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all",
+                          showExplanationSidebar ? "bg-[#4A5D23] text-white shadow-lg" : "text-black/40 hover:text-black"
+                        )}
+                      >
+                        <BookOpen size={12} />
+                        Mentoria: {showExplanationSidebar ? 'Aberta' : 'Fechada'}
+                      </button>
+                    </>
+                  )}
                 </div>
 
                 <button 
-                  onClick={() => setExpandedMap(null)}
+                  onClick={() => {
+                    setExpandedMap(null);
+                    setExpandedExplanation(null);
+                  }}
                   className="bg-[#141414] text-white px-10 py-3 rounded-full font-black uppercase text-sm transition-all hover:bg-[#4A5D23] active:scale-95 shadow-xl"
                 >
                   Fechar
                 </button>
               </div>
-              <div className="flex-1 overflow-hidden relative group">
-                <MindMap markdown={expandedMap} style={mapStyle} className="bg-white/50" />
+              <div className="flex-1 flex flex-col md:flex-row gap-6 overflow-hidden relative group">
+                <div className={cn(
+                  "flex-1 bg-white/50 rounded-[3rem] border border-black/5 overflow-hidden relative transition-all duration-500 ease-in-out",
+                  (expandedExplanation && showExplanationSidebar) ? "md:w-2/3" : "w-full"
+                )}>
+                  <MindMap markdown={expandedMap} style={mapStyle} className="w-full h-full" />
+                </div>
+                
+                <AnimatePresence>
+                  {expandedExplanation && showExplanationSidebar && (
+                    <motion.div 
+                      initial={{ x: 300, opacity: 0 }}
+                      animate={{ x: 0, opacity: 1 }}
+                      exit={{ x: 300, opacity: 0 }}
+                      transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+                      className="md:w-1/3 bg-white/80 backdrop-blur-xl rounded-[3rem] border border-black/5 p-8 overflow-y-auto custom-scrollbar shadow-xl"
+                    >
+                      <div className="flex items-center gap-3 mb-6 opacity-30 font-mono text-[10px] font-black uppercase tracking-[0.4em]">
+                        Mentoria Study Mentor
+                      </div>
+                      <div className="prose prose-sm max-w-none prose-headings:font-black prose-headings:uppercase prose-headings:tracking-tighter prose-p:leading-relaxed text-[#141414]">
+                        <ReactMarkdown>{expandedExplanation}</ReactMarkdown>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             </motion.div>
           </motion.div>
@@ -784,7 +864,7 @@ export default function App() {
             <BrainCircuit className="w-6 h-6 text-white" />
           </motion.div>
           <div>
-            <h1 className="text-2xl font-black tracking-tighter uppercase leading-none text-[#141414]">Mentor INSS</h1>
+            <h1 className="text-2xl font-black tracking-tighter uppercase leading-none text-[#141414]">STUDY MENTOR</h1>
             <p className="font-mono text-[9px] uppercase font-bold opacity-40 tracking-[0.4em] mt-1">High Performance AI</p>
           </div>
         </div>
@@ -849,13 +929,19 @@ export default function App() {
               </button>
             </div>
           ) : (
-            <button 
-              onClick={() => signIn()}
-              className="flex items-center gap-2 px-6 py-2.5 bg-[#4A5D23] text-white rounded-full hover:scale-105 active:scale-95 transition-all text-sm font-black uppercase tracking-tighter shadow-xl"
-            >
-              <LogIn size={18} />
-              Entrar
-            </button>
+            <div className="flex flex-col items-end">
+              <button 
+                onClick={handleSignIn}
+                disabled={isLoggingIn}
+                className="flex items-center gap-2 px-6 py-2.5 bg-[#4A5D23] text-white rounded-full hover:scale-105 active:scale-95 transition-all text-sm font-black uppercase tracking-tighter shadow-xl disabled:opacity-50"
+              >
+                <LogIn size={18} />
+                {isLoggingIn ? 'Entrando...' : 'Entrar'}
+              </button>
+              {authError && (
+                <p className="fixed top-20 right-8 text-[9px] text-red-500 font-black uppercase bg-white/80 backdrop-blur px-3 py-1 rounded-full border border-red-100 shadow-sm">{authError}</p>
+              )}
+            </div>
           )}
         </div>
       </header>
@@ -900,13 +986,13 @@ export default function App() {
               <motion.div 
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                className="bg-white/50 backdrop-blur-xl p-4 rounded-3xl border border-black/5 flex flex-col gap-2 items-center"
+                className="bg-white p-4 rounded-3xl border border-black/5 flex flex-col gap-2 items-center shadow-lg"
               >
                 <p className="text-[10px] font-black uppercase tracking-tighter opacity-40">Salvar estudo em:</p>
                 <div className="relative">
                   <button 
                     onClick={() => setShowFolderDropdown(!showFolderDropdown)}
-                    className="flex items-center gap-3 bg-white/40 backdrop-blur-md px-6 py-3 rounded-2xl shadow-sm border border-black/5 hover:bg-white/60 transition-all min-w-[200px] justify-between"
+                    className="flex items-center gap-3 bg-white px-6 py-3 rounded-2xl shadow-sm border border-black/5 hover:bg-gray-50 transition-all min-w-[200px] justify-between"
                   >
                     <div className="flex items-center gap-3">
                       <LayoutGrid size={16} className="text-[#4A5D23]" />
@@ -928,7 +1014,7 @@ export default function App() {
                           initial={{ opacity: 0, y: -10, scale: 0.95 }}
                           animate={{ opacity: 1, y: 0, scale: 1 }}
                           exit={{ opacity: 0, y: -10, scale: 0.95 }}
-                          className="absolute bottom-full mb-2 left-0 right-0 z-50 bg-white/20 backdrop-blur-2xl border border-white/40 rounded-3xl overflow-hidden shadow-2xl p-1"
+                          className="absolute bottom-full mb-2 left-0 right-0 z-50 bg-white border border-gray-200 rounded-3xl overflow-hidden shadow-2xl p-1"
                         >
                           {folders.map(f => (
                             <button
@@ -1000,13 +1086,13 @@ export default function App() {
                 )}>
                   <div className={cn(
                     "p-10 border border-white/60 relative rounded-[3.5rem] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.1)]",
-                    glassEffect ? "bg-white/20 backdrop-blur-md" : "bg-white/80"
+                    glassEffect ? "bg-white/90 backdrop-blur-md" : "bg-white"
                   )}>
                     <div className={cn(
                       "flex items-center gap-3 mb-6 opacity-30 font-mono text-[10px] font-black uppercase tracking-[0.4em]",
                       msg.role === 'user' ? "justify-end" : "justify-start"
                     )}>
-                      {msg.role === 'user' ? 'Input Data' : 'Expert Mentor AI'}
+                      {msg.role === 'user' ? 'Input Data' : 'Study Mentor AI'}
                     </div>
                     
                     {msg.role === 'user' ? (
@@ -1030,7 +1116,10 @@ export default function App() {
                       )}>
                         <div className="flex items-center gap-4">
                           <button 
-                            onClick={() => setExpandedMap(msg.mermaidCode || null)}
+                            onClick={() => {
+                              setExpandedMap(msg.mermaidCode || null);
+                              setExpandedExplanation(msg.content || null);
+                            }}
                             className="group flex items-center gap-3 px-8 py-4 bg-[#141414] text-white rounded-[1.5rem] hover:scale-105 active:scale-95 transition-all text-xs uppercase font-black tracking-widest shadow-2xl"
                           >
                             <Maximize2 size={16} className="group-hover:rotate-12 transition-transform" />
@@ -1061,7 +1150,7 @@ export default function App() {
                             {folders.map(f => (
                               <button 
                                 key={f.id}
-                                onClick={() => saveMap(f.id, lastFileName.current, msg.mermaidCode || '', messages)}
+                                onClick={() => saveMap(f.id, lastFileName.current, msg.mermaidCode || '', msg.content, messages)}
                                 className="px-3 py-2 bg-black/5 hover:bg-black text-black hover:text-white rounded-xl text-[9px] uppercase font-black tracking-tight transition-all text-left truncate"
                               >
                                 {f.name}
@@ -1071,7 +1160,7 @@ export default function App() {
                         </div>
                       )}
                       
-                      <div className="bg-white/20 backdrop-blur-xl p-4 rounded-[4rem] border border-white/60 shadow-inner h-[400px] overflow-hidden">
+                      <div className="bg-white/90 backdrop-blur-xl p-4 rounded-[4rem] border border-white/60 shadow-inner h-[400px] overflow-hidden">
                         <MindMap markdown={msg.mermaidCode} />
                       </div>
                     </motion.div>
@@ -1249,7 +1338,7 @@ export default function App() {
                 
                 <div className={cn(
                   "border border-white/60 p-2 rounded-[2.5rem] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.15)] flex flex-col gap-1 transition-all focus-within:shadow-[0_48px_96px_-24px_rgba(0,0,0,0.2)]",
-                  glassEffect ? "bg-white/40 backdrop-blur-3xl" : "bg-white"
+                  glassEffect ? "bg-white/90 backdrop-blur-3xl" : "bg-white"
                 )}>
                   <div className="flex items-center justify-between">
                     {/* Folder selection removed as it was redundant */}

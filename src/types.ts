@@ -17,6 +17,7 @@ export type SavedMap = {
   id: string;
   name: string;
   content: string;
+  explanation?: string;
   messages?: Message[];
   createdAt: number;
   style?: MapStyle;
